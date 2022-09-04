@@ -1,0 +1,590 @@
+---
+title: "Coffee"
+author: "Sean Cerulean Johnson"
+date: "2022-04-03"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Data : Importing and Cleaning
+
+From TidyTuesday 
+URL:https://github.com/rfordatascience/tidytuesday/tree/master/data/2020/2020-07-07
+
+>Note: within the above link, there was already some pre-processing done to the data with the column and value names.
+
+```{r include=FALSE}
+coffee_ratings <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-07-07/coffee_ratings.csv')
+
+```
+
+# Quick Overview Summary 
+
+```{r}
+summary(coffee_ratings)
+```
+Quite a few NA's.
+
+Numerical Columns: 1 within quakers, and 230 in Altitude low/high/mean.
+
+Next, nee to check what is happening in the rest of the data set, the character type.
+
+# Count of NA's per coloumn 
+```{r}
+#type of data, col = 2, type of function applied
+apply(X=is.na(coffee_ratings), MARGIN = 2, FUN = sum)
+```
+
+There a quite a few missing values and many columns have many.
+I will be just removing some of the columns with too many missing values, for instance lot_number and farm_name.
+Additionally, I there will be removal of columns that do not heavily influence the goals of this project.
+
+```{r}
+library(tidyverse)
+```
+
+# Removal of columns 
+```{r}
+coffee = coffee_ratings%>%
+  select(-farm_name,-lot_number,-mill,-ico_number,-altitude,
+         -altitude_low_meters,-altitude_high_meters,-producer,-company,
+         -expiration,-certification_address,-owner_1,-grading_date,
+         -certification_contact,-unit_of_measurement)
+```
+
+#Remove Rows Containing Missing Values
+```{r}
+coffee = na.omit(coffee)
+```
+
+#Changing Mass to all Imperial Units of Measurements
+```{r}
+#selecting only items with lbs pattern within column to see how many
+#Nathan F reminded me to the use of grep
+coffee[grep("lbs",coffee$bag_weight),]
+```
+
+```{r}
+#separating out the columns based on the value and units associated with it
+coffee = separate(data = coffee, col = bag_weight, into = c("weight", "type"), sep = " ")
+```
+
+```{r}
+#converted string to numeric
+coffee$weight = as.numeric(coffee$weight)
+```
+
+```{r}
+#simple loop to change units
+for(i in 1:length(coffee)){
+  if(coffee[i,8]=="kg"){
+  coffee[i,7] = round(coffee[i,7] * 2.20462,0)
+  coffee[i,8] = "lbs"
+  }
+}  
+```
+
+```{r}
+#remove type column as the weight col is uniform for unit type
+coffee = coffee%>%
+  select(-type)
+```
+
+#Changing Length to all Imperial Units of Measurements
+```{r}
+#Note: If reshape lib is on, this will break
+coffee = coffee%>%rename(avg_altitude=altitude_mean_meters)
+coffee$avg_altitude = round(coffee$avg_altitude * 3.28084,0)
+```
+
+#Altering rows with years with form Year1/Year2 to the intial year (Year1)
+```{r}
+coffee$harvest_year = substr(coffee$harvest_year,1,4)
+coffee$harvest_year = as.numeric(coffee$harvest_year)
+```
+
+The above chunk was done do to the initial inception of that batch of coffee.
+
+#Numerical Summary to see the data for potentail outliers
+```{r}
+summary(coffee[,c(9,12:24,26,28)])
+```
+The parameters for defects, quakers, and average altitude seem to have quite a range for values.
+Additionally, it can be seen for these fields that the max points are quite a ways away from the mean.
+
+## EDA / Visuals
+
+```{r}
+library(ggplot2)
+```
+
+#Check for outliers in some of the fields
+```{r}
+defect1_plt = ggplot(coffee, aes(y=category_one_defects)) +
+              geom_boxplot()
+defect2_plt = ggplot(coffee, aes(y=category_two_defects)) +
+              geom_boxplot()
+alt_plt = ggplot(coffee, aes(y=avg_altitude)) +
+              geom_boxplot()
+quakers = ggplot(coffee, aes(y=quakers)) +
+              geom_boxplot()
+
+defect1_plt
+defect2_plt
+alt_plt
+quakers
+```
+
+There are some outliers, but not that many that would result in a concern at this time.
+These fields may be removed from the current analysis due to the outliers and lack of variance within the data.
+As the majority of these values are 0. This will be removed in the upcoming data chunks.
+Additionally, as this project is to have more focus in analysis, there will be additional removal of fields. 
+Specifically, the ownership items and their location details.
+
+#Redfine the Dataset
+```{r}
+c = coffee[,c(1:2,4,10:26,28)]
+```
+
+#Condense the data
+```{r}
+c.v1 = c%>%pivot_longer(
+  cols = !c(species, country_of_origin,variety,processing_method,color),
+  names_to = "Variables",
+  values_to = "Values")
+```
+
+Since, this data set will be re-used for other visuals. 
+Otherwise the following code chunk could be used to generate a specific visual. 
+
+#Plot the data to see overall behavior
+```{r}
+ggplot(c.v1,aes(x=species,y=Values))+geom_boxplot()+facet_wrap(~Variables,scales = "free")
+```
+
+#Plot the data to see overall behavior for specific field Coffee Color
+```{r}
+ggplot(c.v1,aes(x=species,y=Values,color=color))+geom_boxplot()+facet_wrap(~Variables,scales = "free")
+```
+
+#Filter out the items that have known outliers
+```{r}
+c.v2 = c.v1 %>%
+  filter(Variables != 'avg_altitude' & Variables != 'category_one_defects'& Variables != 'category_two_defects')
+```
+
+#Re-run plot
+```{r}
+ggplot(c.v2,aes(x=species,y=Values,color=color))+
+  geom_boxplot()+
+  facet_wrap(~Variables,scales = "free")
+```
+
+#How are the cup points distributed and where the 'weight' it is at by the Species and Coffee Color#
+```{r}
+c.v2 %>%
+  filter(Variables == 'total_cup_points')%>%
+  ggplot(aes(x=species,y=Values,color=color))+
+  geom_boxplot()
+
+c.v2 %>%
+  filter(Variables == 'total_cup_points')%>%
+  ggplot(aes(x=species,y=Values,color=color))+
+  geom_violin()
+```
+
+#How are the cup points distributed and where the 'weight' it is at by the Coffee Color and Processing Method
+```{r warning=FALSE}
+c.v2 %>%
+  filter(Variables == 'total_cup_points')%>%
+  ggplot(aes(x=processing_method,y=Values,color=color))+
+  geom_boxplot()+
+    facet_wrap(~processing_method,scales = "free")
+
+c.v2 %>%
+  filter(Variables == 'total_cup_points')%>%
+  ggplot(aes(x=processing_method,y=Values,color=color))+
+  geom_violin()+
+    facet_wrap(~processing_method,scales = "free")
+```
+
+#Heatmap of Correlations
+```{r warning=FALSE}
+c = c[,c(1,6:16)]
+cormat = cor(c)
+melted = reshape::melt(cormat,varnames = c("ParameterX", "ParameterY"))
+```
+
+#Heatmap#
+```{r}
+ggplot(data = melted, aes(x=ParameterX, y=ParameterY, fill=value)) +
+  geom_tile(color = "white")+
+ scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+   midpoint = 0, limit = c(-1,1), space = "Lab", 
+   name="Pearson \n Correlation") + 
+  labs(x = "", y = "")+
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5), axis.text.x = element_text(angle = 45, vjust = 1, size = 9, hjust = 1))+
+ coord_fixed()
+``` 
+
+#See the data make-up in a numerical summary
+```{r}
+library(formattable)
+```
+
+#Function for Calculating Frequency
+```{r}
+freqq = function(df,col_i,col_j){
+  a = df %>%
+  group_by({{col_i}},{{col_j}}) %>%
+  summarise(count = n()) %>%
+  mutate(freq = formattable::percent(count / sum(count)))
+  return(a)
+}
+```
+
+#Overall Frequency all Countries
+```{r}
+freqq(c.v1,Variables,Values)
+```
+
+#Overall Frequency for Brazil
+```{r}
+freqq(c.v1%>%filter(country_of_origin=="Brazil"),Variables,Values)
+```
+
+##Analysis Preparation
+
+#Format new label (total_cup_points) to be categorical
+```{r}
+coffee$tcp = coffee$total_cup_points
+```
+
+#Creating Bins for the Cup Points
+```{r}
+for(i in 1:894){
+  if(coffee[i,29] >= 80){
+    coffee[i,29] = 80
+  }
+  else if(coffee[i,29] >= 70 & coffee[i,29] < 80){
+    coffee[i,29] = 70
+  }
+  else if(coffee[i,29] >= 60 & coffee[i,29] < 70){
+    coffee[i,29] = 60
+  }
+  else{
+    coffee[i,29] = 50
+  }
+}
+coffee$tcp = round(coffee$tcp,0)
+```
+
+While the bins could be more specific and look at every 2 or 5 points, it made more
+sense to use broader bins. This is due to trying to understand what makes a coffee from
+a specific bean have higher or lower overall cup points 
+(i.e., what is the difference between 70s and 80s cup of coffee). 
+
+
+#Accuracy table for comparison between models
+```{r}
+table_accuracy = matrix(nrow=4,ncol=1)
+colnames(table_accuracy) = c('Accuracy')
+rownames(table_accuracy) = c('DTree','NB','ANN','KNN')
+table_accuracy
+```
+
+This is to help determining which model or models is better than the others. 
+If there are many with similar accuracy, then the model that is the easiest to
+interpret and explain to a general audience.
+
+
+#Set seed so analysis is repeatable
+```{r}
+set.seed(1)
+```
+
+For analysis
+```{r warning=FALSE}
+df = coffee[,c(9:22,25,29)]
+for(i in 4 : 13){
+  df[,i]=round(df[,i],2)
+}
+```
+
+
+If the data was processing a bit slowly for initial predicting, as it was too granular
+so this step was helpful to making the ML run quicker.  
+
+#Fix issue with the Data#
+```{r}
+df$processing_method= as.factor(df$processing_method)
+df$variety = as.factor(df$variety)
+df = df[,c(1:16)]
+df$tcp = as.factor(df$tcp)
+df$moisture = round(df$moisture,1)
+```
+
+This was missed earlier in the summary, but the fields that are characters, need
+to be changed to type factor for the analysis.
+
+Simple k-fold cross validation(cv) 
+```{r}
+set.seed(1)
+n = nrow(df)
+folds = 10
+tail = n%/%folds
+
+rnd = runif(n)
+rank = rank(rnd)
+
+#block/chunk from cv
+blk = (rank-1)%/%tail+1
+blk = as.factor(blk)
+
+#to see formation of folds 
+print(summary(blk))
+```
+Could turn the above into a more personalized cross validation method than one of the 
+packages in an R library.
+
+## Predicitve Analysis 
+
+#Decision Tree
+```{r}
+library(rpart)
+set.seed(1)
+
+all.acc = numeric(0)
+for(i in 1:folds){
+  tree = rpart(tcp~.,df[blk != i,],method="class")
+  pred = predict(tree,df[blk==i,],type="class")
+  confMat = table(pred,df$tcp[blk==i])
+  acc = (confMat[1,1]+confMat[2,2]+confMat[3,3]+confMat[4,4])/sum(confMat)
+  all.acc = rbind(all.acc,acc)
+}
+
+print(mean(all.acc))
+table_accuracy[1,1] = mean(all.acc)
+
+```
+A 95% overall accuracy is really good! This indicates if following this tree,
+with details on a bean one could reasonable figure out what its overall score will be
+prior to evaluation. It also indicates what are the more important parameters
+are for a coffee scoring. 
+
+# Example of a table matrix of predicted(rows) and actual(columns) #
+```{r}
+confMat
+```
+This indicates, for the given run, there were 3 miss classifications. Where the
+tree suggested that the bean should have been in the 80s, but was actually in
+the 70s.
+
+# Visual of Decision Tree
+```{r}
+rpart.plot::rpart.plot(tree)
+```
+
+From this plot, I could just bin 50s with the 60sw group.
+This will help with future evaluations where re-binning the classifier would be 
+a potential option to get more granular information. 
+
+# Naive Bayes 
+```{r}
+library(e1071)
+set.seed(1)
+
+all.acc = numeric(0)
+for(i in 1:folds){
+  model = naiveBayes(tcp~.,df[blk != i,],method="class")
+  pred = predict(model,df[blk==i,],type="class")
+  confMat = table(pred,df$tcp[blk==i])
+  acc = (confMat[1,1]+confMat[2,2]+confMat[3,3]+confMat[4,4])/sum(confMat)
+  all.acc = rbind(all.acc,acc)
+}
+
+print(mean(all.acc))
+table_accuracy[2,1] = mean(all.acc)
+```
+Another nice and high accuracy for this PA!
+
+*Wierd R Issue *
+```{r}
+#switch the classifier to numerical
+df$tcp = round(as.numeric(df$tcp),0)
+#them switch it back to a factor
+df$tcp = as.factor(df$tcp)
+```
+
+This was a very weird issue. I knew that this was a factor was needed for the classifier.
+However, it was throwing a NaN for an accuracy value and just by switching the format back and forth
+corrected it.
+
+# Neural Network 
+```{r warning=FALSE}
+library(nnet)
+set.seed(1)
+
+all.acc = numeric(0)
+for(i in 1:folds){
+  model = nnet(tcp~.,df[blk != i,], size = 11, trace=FALSE, rang=.06, decay=.006,maxit=500)
+  pred = predict(model, df[blk==i,],type="class")
+  confMat = table(factor(pred,levels=1:4),factor(df$tcp[blk==i],levels=1:4))
+  acc = (confMat[1,1]+confMat[2,2]+confMat[3,3]+confMat[4,4])/sum(confMat)
+  all.acc = rbind(all.acc,acc)
+}
+print(mean(all.acc))
+table_accuracy[3,1] = mean(all.acc)
+```
+Not the best not the worst NN that I have seen. If there was more time, I would 
+have liked to increased the classifiers and used a different library that allowed
+for more hidden layers.
+
+# Neuarl Network Visual 
+```{r}
+library("NeuralNetTools")
+plotnet(model,circle_cex=5,cex_val=.4,max_sp=TRUE,alpha_val=.25,skip=TRUE)
+```
+
+# Note #
+
+An issue I ran in to:
+
+I re-formatted the label/target field and went from a binary (good [>74]/bad[<75])
+classifier to what is it currentlty; 50s,60s,70s, and 80s. However, when running
+running the all of the PAs prior to neural network there were no strange issues.
+When running the NN I recieved an output accuracy of 0.003 an knew there was an 
+issue. 
+
+There was an (un)interesting issue with NN table (well, all tables), as it was dropping the
+first two rows as it was not forward feeding into those nodes. The following
+is the work around to resolve this issue.
+
+#Before
+```{r warning=FALSE}
+set.seed(1)
+i=1
+  model = nnet(tcp~.,df[blk != i,], size = 10, trace=FALSE, wgts=.05)
+  pred = predict(model, df[blk==i,],type="class")
+  confMat = table(pred,df$tcp[blk==i])
+  confMat
+```
+
+#After
+```{r warning=FALSE}
+set.seed(1)
+i=1
+  model = nnet(tcp~.,df[blk != i,], size = 10, trace=FALSE, wgts=.05)
+  pred = predict(model, df[blk==i,],type="class")
+  confMat = table(factor(pred,levels=1:4),factor(df$tcp[blk==i],levels=1:4))
+  confMat
+```
+This was then applied to all of the PAs.
+
+# K-Nearest Neighbor Preparation 
+```{r}
+set.seed(1)
+df$tcp = as.factor(df$tcp)
+library (caret)
+trControl <- trainControl(method  = "cv", number  = 10)
+knn = df[,]
+```
+
+# KNN 
+```{r warning=FALSE}
+set.seed(1)
+model <- train(tcp ~ .,
+             method     = "knn",
+             tuneGrid   = expand.grid(k = 1:10),
+             trControl  = trControl,
+             data       = knn)
+acc = mean(model$results$Accuracy)
+table_accuracy[4,1] = acc
+
+plot(model)
+```
+
+This is a visual to see how many neighbors the KNN will be running. From this
+visual it could possibly run at 9 groups due to the accuracy level.
+
+#View Accuracy Table
+```{r}
+tab = round(table_accuracy,4)
+tab
+```
+
+
+##Preferred Model
+```{r}
+rpart.plot::rpart.plot(tree)
+```
+Top 3 parameters for understanding a coffee's score.
+
+~Cupper points are the most informative parameter in deciding if a coffee is to
+be in the 80s or below this.
+
+~If place coffee is <7 cupper points, the next deciding factor is how good is the flavor
+of the coffee.
+
+~ If coffee is >7 cupper points, the next deciding factor is how clean the 
+coffee leaves the cup.
+
+For further analysis
+```{r warning=FALSE}
+df2 = coffee[,c(4,5,9:22,25,29)]
+for(i in 6 : 16){
+  df2[,i]=round(df2[,i],2)
+  
+df2$processing_method= as.factor(df2$processing_method)
+df2$variety = as.factor(df2$variety)
+df2$tcp = as.factor(df2$tcp)
+df2$moisture = round(df2$moisture,1)  
+df2$color = as.factor(df2$color)
+df2$country_of_origin = as.factor(df2$country_of_origin)
+df2$region = as.factor(df2$region)
+df3 = df2[,c(1,3:18)]
+}
+```
+
+```{r}
+set.seed(1)
+n = nrow(df3)
+folds = 10
+tail = n%/%folds
+
+rnd = runif(n)
+rank = rank(rnd)
+
+#block/chunk from cv
+blk = (rank-1)%/%tail+1
+blk = as.factor(blk)
+
+#to see formation of folds 
+print(summary(blk))
+```
+
+```{r}
+set.seed(1)
+
+all.acc = numeric(0)
+for(i in 1:folds){
+  tree = rpart(tcp~.,df3[blk != i,],method="class")
+  pred = predict(tree,df3[blk==i,],type="class")
+  confMat = table(pred,df3$tcp[blk==i])
+  acc = (confMat[1,1]+confMat[2,2]+confMat[3,3]+confMat[4,4])/sum(confMat)
+  all.acc = rbind(all.acc,acc)
+}
+
+print(mean(all.acc))
+```
+Interestingly, adding countries lowers the accuracy.
+
+```{r}
+rpart.plot::rpart.plot(tree)
+```
+
+From the visual, it appears that Central and South America do not produce good coffee.
