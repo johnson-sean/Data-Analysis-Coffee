@@ -2,14 +2,24 @@
 title: "Coffee"
 author: "Sean Cerulean Johnson"
 date: "2022-04-03"
-output: pdf_document
+output:
+  pdf_document: default
+
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Data : Importing and Cleaning
+# Library
+
+```{r}
+library(Thematic)
+library(dplyr)
+library(ggplot2)
+```
+
+# Data : Importing and Cleaning
 
 From TidyTuesday 
 URL:https://github.com/rfordatascience/tidytuesday/tree/master/data/2020/2020-07-07
@@ -21,32 +31,27 @@ coffee_ratings <- readr::read_csv('https://raw.githubusercontent.com/rfordatasci
 
 ```
 
-# Quick Overview Summary 
+# Quick Overview 
 
-```{r}
-summary(coffee_ratings)
+```{r eval=FALSE}
+summary<-summary(coffee_ratings)
+tibble(summary)%>%
+  tabGT()
 ```
+
 Quite a few NA's.
-
 Numerical Columns: 1 within quakers, and 230 in Altitude low/high/mean.
-
-Next, nee to check what is happening in the rest of the data set, the character type.
-
-# Count of NA's per coloumn 
+Next, need to check what is happening in the rest of the data set, the character type.
+# Data Wrangling
+## NA's per coloumn 
 ```{r}
-#type of data, col = 2, type of function applied
 apply(X=is.na(coffee_ratings), MARGIN = 2, FUN = sum)
 ```
 
-There a quite a few missing values and many columns have many.
-I will be just removing some of the columns with too many missing values, for instance lot_number and farm_name.
-Additionally, I there will be removal of columns that do not heavily influence the goals of this project.
+There a quite a few missing values overall and many columns have many.
+I will be just removing some of the columns with too many missing values, for instance lot_number and farm_name. Additionally, I there will be removal of columns that do not heavily influence the goals of this project. While there are a few methods for replacing values within the dataset, my first approach is to understand the set in the instance if all values were correct. After that analysis, to evaluate if an how to replace missing values.
 
-```{r}
-library(tidyverse)
-```
-
-# Removal of columns 
+## Removal of columns 
 ```{r}
 coffee = coffee_ratings%>%
   select(-farm_name,-lot_number,-mill,-ico_number,-altitude,
@@ -55,12 +60,13 @@ coffee = coffee_ratings%>%
          -certification_contact,-unit_of_measurement)
 ```
 
-#Remove Rows Containing Missing Values
+## Removal of Remaining NA's
 ```{r}
 coffee = na.omit(coffee)
 ```
 
-#Changing Mass to all Imperial Units of Measurements
+## Alter Units Notations
+### Bag Weight
 ```{r}
 #selecting only items with lbs pattern within column to see how many
 #Nathan F reminded me to the use of grep
@@ -69,7 +75,7 @@ coffee[grep("lbs",coffee$bag_weight),]
 
 ```{r}
 #separating out the columns based on the value and units associated with it
-coffee = separate(data = coffee, col = bag_weight, into = c("weight", "type"), sep = " ")
+coffee = tidyr::separate(data = coffee, col = bag_weight, into = c("weight", "type"), sep = " ")
 ```
 
 ```{r}
@@ -93,14 +99,16 @@ coffee = coffee%>%
   select(-type)
 ```
 
-#Changing Length to all Imperial Units of Measurements
+### Altitude
 ```{r}
 #Note: If reshape lib is on, this will break
 coffee = coffee%>%rename(avg_altitude=altitude_mean_meters)
 coffee$avg_altitude = round(coffee$avg_altitude * 3.28084,0)
 ```
 
-#Altering rows with years with form Year1/Year2 to the intial year (Year1)
+### Years 
+
+Here there were years in the form of Year1/Year2, the following will be changing year to the initial year (Year1)
 ```{r}
 coffee$harvest_year = substr(coffee$harvest_year,1,4)
 coffee$harvest_year = as.numeric(coffee$harvest_year)
@@ -108,20 +116,16 @@ coffee$harvest_year = as.numeric(coffee$harvest_year)
 
 The above chunk was done do to the initial inception of that batch of coffee.
 
-#Numerical Summary to see the data for potentail outliers
+#Numerical Summary
 ```{r}
 summary(coffee[,c(9,12:24,26,28)])
 ```
 The parameters for defects, quakers, and average altitude seem to have quite a range for values.
 Additionally, it can be seen for these fields that the max points are quite a ways away from the mean.
 
-## EDA / Visuals
+# EDA / Visuals
 
-```{r}
-library(ggplot2)
-```
-
-#Check for outliers in some of the fields
+## Outliers Check
 ```{r}
 defect1_plt = ggplot(coffee, aes(y=category_one_defects)) +
               geom_boxplot()
@@ -139,19 +143,18 @@ quakers
 ```
 
 There are some outliers, but not that many that would result in a concern at this time.
-These fields may be removed from the current analysis due to the outliers and lack of variance within the data.
-As the majority of these values are 0. This will be removed in the upcoming data chunks.
+These fields may be removed from the current analysis due to the outliers and lack of variance within the data. As the majority of these values are 0. This will be removed in the upcoming data chunks.
 Additionally, as this project is to have more focus in analysis, there will be additional removal of fields. 
 Specifically, the ownership items and their location details.
 
-#Redfine the Dataset
+## Redefine DF for Visuals
 ```{r}
 c = coffee[,c(1:2,4,10:26,28)]
 ```
 
-#Condense the data
+## Condense the data
 ```{r}
-c.v1 = c%>%pivot_longer(
+c.v1 = c%>%tidyr::pivot_longer(
   cols = !c(species, country_of_origin,variety,processing_method,color),
   names_to = "Variables",
   values_to = "Values")
@@ -160,43 +163,46 @@ c.v1 = c%>%pivot_longer(
 Since, this data set will be re-used for other visuals. 
 Otherwise the following code chunk could be used to generate a specific visual. 
 
-#Plot the data to see overall behavior
+## Overall Bbhavior
 ```{r}
-ggplot(c.v1,aes(x=species,y=Values))+geom_boxplot()+facet_wrap(~Variables,scales = "free")
+ggplot(c.v1,aes(x=species,y=Values))+
+  geom_boxplot()+
+  facet_wrap(~Variables,scales = "free")
 ```
 
-#Plot the data to see overall behavior for specific field Coffee Color
+## Overall behavior: Coffee Color
 ```{r}
-ggplot(c.v1,aes(x=species,y=Values,color=color))+geom_boxplot()+facet_wrap(~Variables,scales = "free")
+ggplot(c.v1,aes(x=species,y=Values,color=color))+
+  geom_boxplot()+
+  facet_wrap(~Variables,scales = "free")
 ```
 
-#Filter out the items that have known outliers
+## Filter out variables that many outliers
+
+This is an area that could be re-visited and have filters placed on data but chose to remove for initial analysis
+
 ```{r}
 c.v2 = c.v1 %>%
   filter(Variables != 'avg_altitude' & Variables != 'category_one_defects'& Variables != 'category_two_defects')
 ```
 
-#Re-run plot
+## Re-run plot
 ```{r}
 ggplot(c.v2,aes(x=species,y=Values,color=color))+
   geom_boxplot()+
   facet_wrap(~Variables,scales = "free")
 ```
 
-#How are the cup points distributed and where the 'weight' it is at by the Species and Coffee Color#
+## Cup points distribution
+
 ```{r}
 c.v2 %>%
   filter(Variables == 'total_cup_points')%>%
   ggplot(aes(x=species,y=Values,color=color))+
   geom_boxplot()
-
-c.v2 %>%
-  filter(Variables == 'total_cup_points')%>%
-  ggplot(aes(x=species,y=Values,color=color))+
-  geom_violin()
 ```
 
-#How are the cup points distributed and where the 'weight' it is at by the Coffee Color and Processing Method
+## Cup points distribution: Coffee Color and Processing Method
 ```{r warning=FALSE}
 c.v2 %>%
   filter(Variables == 'total_cup_points')%>%
@@ -204,21 +210,16 @@ c.v2 %>%
   geom_boxplot()+
     facet_wrap(~processing_method,scales = "free")
 
-c.v2 %>%
-  filter(Variables == 'total_cup_points')%>%
-  ggplot(aes(x=processing_method,y=Values,color=color))+
-  geom_violin()+
-    facet_wrap(~processing_method,scales = "free")
 ```
 
-#Heatmap of Correlations
+# Heatmap of Correlations
 ```{r warning=FALSE}
 c = c[,c(1,6:16)]
 cormat = cor(c)
 melted = reshape::melt(cormat,varnames = c("ParameterX", "ParameterY"))
 ```
 
-#Heatmap#
+## Heatmap
 ```{r}
 ggplot(data = melted, aes(x=ParameterX, y=ParameterY, fill=value)) +
   geom_tile(color = "white")+
@@ -230,13 +231,7 @@ ggplot(data = melted, aes(x=ParameterX, y=ParameterY, fill=value)) +
   theme(plot.title = element_text(hjust = 0.5), axis.text.x = element_text(angle = 45, vjust = 1, size = 9, hjust = 1))+
  coord_fixed()
 ``` 
-
-#See the data make-up in a numerical summary
-```{r}
-library(formattable)
-```
-
-#Function for Calculating Frequency
+# Function: Calculating Frequency
 ```{r}
 freqq = function(df,col_i,col_j){
   a = df %>%
@@ -248,23 +243,25 @@ freqq = function(df,col_i,col_j){
 ```
 
 #Overall Frequency all Countries
-```{r}
-freqq(c.v1,Variables,Values)
+```{r eval=FALSE}
+freqq(c.v1,Variables,Values)%>%
+  tabDT()
 ```
 
-#Overall Frequency for Brazil
-```{r}
-freqq(c.v1%>%filter(country_of_origin=="Brazil"),Variables,Values)
+## Overall Frequency for Brazil
+```{r eval=FALSE}
+freqq(c.v1%>%filter(country_of_origin=="Brazil"),Variables,Values)%>%
+  tabDT()
 ```
 
-##Analysis Preparation
+# Analysis Preparation
 
-#Format new label (total_cup_points) to be categorical
+## Cup Points to Categorical
 ```{r}
 coffee$tcp = coffee$total_cup_points
 ```
 
-#Creating Bins for the Cup Points
+# Bins for the Cup Points
 ```{r}
 for(i in 1:894){
   if(coffee[i,29] >= 80){
@@ -289,7 +286,7 @@ a specific bean have higher or lower overall cup points
 (i.e., what is the difference between 70s and 80s cup of coffee). 
 
 
-#Accuracy table for comparison between models
+# Accuracy table for Model Comparison
 ```{r}
 table_accuracy = matrix(nrow=4,ncol=1)
 colnames(table_accuracy) = c('Accuracy')
@@ -302,12 +299,12 @@ If there are many with similar accuracy, then the model that is the easiest to
 interpret and explain to a general audience.
 
 
-#Set seed so analysis is repeatable
+## Set seed for Reproducibilty
 ```{r}
 set.seed(1)
 ```
 
-For analysis
+## Additional Analysis setup
 ```{r warning=FALSE}
 df = coffee[,c(9:22,25,29)]
 for(i in 4 : 13){
@@ -315,11 +312,10 @@ for(i in 4 : 13){
 }
 ```
 
-
 If the data was processing a bit slowly for initial predicting, as it was too granular
 so this step was helpful to making the ML run quicker.  
 
-#Fix issue with the Data#
+# Formatting Data
 ```{r}
 df$processing_method= as.factor(df$processing_method)
 df$variety = as.factor(df$variety)
@@ -333,7 +329,6 @@ to be changed to type factor for the analysis.
 
 Simple k-fold cross validation(cv) 
 ```{r}
-set.seed(1)
 n = nrow(df)
 folds = 10
 tail = n%/%folds
@@ -351,16 +346,15 @@ print(summary(blk))
 Could turn the above into a more personalized cross validation method than one of the 
 packages in an R library.
 
-## Predicitve Analysis 
+# Predicitve Analysis 
 
-#Decision Tree
+## Decision Tree (rpart)
 ```{r}
-library(rpart)
 set.seed(1)
 
 all.acc = numeric(0)
 for(i in 1:folds){
-  tree = rpart(tcp~.,df[blk != i,],method="class")
+  tree = rpart::rpart(tcp~.,df[blk != i,],method="class")
   pred = predict(tree,df[blk==i,],type="class")
   confMat = table(pred,df$tcp[blk==i])
   acc = (confMat[1,1]+confMat[2,2]+confMat[3,3]+confMat[4,4])/sum(confMat)
@@ -376,7 +370,7 @@ with details on a bean one could reasonable figure out what its overall score wi
 prior to evaluation. It also indicates what are the more important parameters
 are for a coffee scoring. 
 
-# Example of a table matrix of predicted(rows) and actual(columns) #
+### Example of a table matrix 
 ```{r}
 confMat
 ```
@@ -384,7 +378,7 @@ This indicates, for the given run, there were 3 miss classifications. Where the
 tree suggested that the bean should have been in the 80s, but was actually in
 the 70s.
 
-# Visual of Decision Tree
+### Visual of Decision Tree
 ```{r}
 rpart.plot::rpart.plot(tree)
 ```
@@ -393,14 +387,13 @@ From this plot, I could just bin 50s with the 60sw group.
 This will help with future evaluations where re-binning the classifier would be 
 a potential option to get more granular information. 
 
-# Naive Bayes 
+## Naive Bayes (e1071)
 ```{r}
-library(e1071)
 set.seed(1)
 
 all.acc = numeric(0)
 for(i in 1:folds){
-  model = naiveBayes(tcp~.,df[blk != i,],method="class")
+  model = e1071::naiveBayes(tcp~.,df[blk != i,],method="class")
   pred = predict(model,df[blk==i,],type="class")
   confMat = table(pred,df$tcp[blk==i])
   acc = (confMat[1,1]+confMat[2,2]+confMat[3,3]+confMat[4,4])/sum(confMat)
@@ -410,8 +403,6 @@ for(i in 1:folds){
 print(mean(all.acc))
 table_accuracy[2,1] = mean(all.acc)
 ```
-Another nice and high accuracy for this PA!
-
 *Wierd R Issue *
 ```{r}
 #switch the classifier to numerical
@@ -424,14 +415,13 @@ This was a very weird issue. I knew that this was a factor was needed for the cl
 However, it was throwing a NaN for an accuracy value and just by switching the format back and forth
 corrected it.
 
-# Neural Network 
+## Neural Network (nnet)
 ```{r warning=FALSE}
-library(nnet)
 set.seed(1)
 
 all.acc = numeric(0)
 for(i in 1:folds){
-  model = nnet(tcp~.,df[blk != i,], size = 11, trace=FALSE, rang=.06, decay=.006,maxit=500)
+  model = nnet::nnet(tcp~.,df[blk != i,], size = 11, trace=FALSE, rang=.06, decay=.006,maxit=500)
   pred = predict(model, df[blk==i,],type="class")
   confMat = table(factor(pred,levels=1:4),factor(df$tcp[blk==i],levels=1:4))
   acc = (confMat[1,1]+confMat[2,2]+confMat[3,3]+confMat[4,4])/sum(confMat)
@@ -444,13 +434,12 @@ Not the best not the worst NN that I have seen. If there was more time, I would
 have liked to increased the classifiers and used a different library that allowed
 for more hidden layers.
 
-# Neuarl Network Visual 
+### Neuarl Network Visual (NeuralNetTools)
 ```{r}
-library("NeuralNetTools")
-plotnet(model,circle_cex=5,cex_val=.4,max_sp=TRUE,alpha_val=.25,skip=TRUE)
+NeuralNetTools::plotnet(model,circle_cex=5,cex_val=.4,max_sp=TRUE,alpha_val=.25,skip=TRUE)
 ```
 
-# Note #
+## Note
 
 An issue I ran in to:
 
@@ -464,40 +453,39 @@ There was an (un)interesting issue with NN table (well, all tables), as it was d
 first two rows as it was not forward feeding into those nodes. The following
 is the work around to resolve this issue.
 
-#Before
+### Before
 ```{r warning=FALSE}
 set.seed(1)
 i=1
-  model = nnet(tcp~.,df[blk != i,], size = 10, trace=FALSE, wgts=.05)
+  model = nnet::nnet(tcp~.,df[blk != i,], size = 10, trace=FALSE, wgts=.05)
   pred = predict(model, df[blk==i,],type="class")
   confMat = table(pred,df$tcp[blk==i])
   confMat
 ```
 
-#After
+### After
 ```{r warning=FALSE}
 set.seed(1)
 i=1
-  model = nnet(tcp~.,df[blk != i,], size = 10, trace=FALSE, wgts=.05)
+  model = nnet::nnet(tcp~.,df[blk != i,], size = 10, trace=FALSE, wgts=.05)
   pred = predict(model, df[blk==i,],type="class")
   confMat = table(factor(pred,levels=1:4),factor(df$tcp[blk==i],levels=1:4))
   confMat
 ```
 This was then applied to all of the PAs.
 
-# K-Nearest Neighbor Preparation 
+## K-Nearest Neighbor Preparation 
 ```{r}
 set.seed(1)
 df$tcp = as.factor(df$tcp)
-library (caret)
-trControl <- trainControl(method  = "cv", number  = 10)
+trControl <- caret::trainControl(method  = "cv", number  = 10)
 knn = df[,]
 ```
 
-# KNN 
+## KNN 
 ```{r warning=FALSE}
 set.seed(1)
-model <- train(tcp ~ .,
+model <- caret::train(tcp ~ .,
              method     = "knn",
              tuneGrid   = expand.grid(k = 1:10),
              trControl  = trControl,
@@ -511,14 +499,14 @@ plot(model)
 This is a visual to see how many neighbors the KNN will be running. From this
 visual it could possibly run at 9 groups due to the accuracy level.
 
-#View Accuracy Table
+# View Accuracy Table
 ```{r}
 tab = round(table_accuracy,4)
 tab
 ```
 
 
-##Preferred Model
+# Preferred Model
 ```{r}
 rpart.plot::rpart.plot(tree)
 ```
@@ -533,7 +521,7 @@ of the coffee.
 ~ If coffee is >7 cupper points, the next deciding factor is how clean the 
 coffee leaves the cup.
 
-For further analysis
+# For further analysis
 ```{r warning=FALSE}
 df2 = coffee[,c(4,5,9:22,25,29)]
 for(i in 6 : 16){
@@ -567,12 +555,12 @@ blk = as.factor(blk)
 print(summary(blk))
 ```
 
-```{r}
+```{r eval=FALSE}
 set.seed(1)
 
 all.acc = numeric(0)
 for(i in 1:folds){
-  tree = rpart(tcp~.,df3[blk != i,],method="class")
+  tree = rpart::rpart(tcp~.,df3[blk != i,],method="class")
   pred = predict(tree,df3[blk==i,],type="class")
   confMat = table(pred,df3$tcp[blk==i])
   acc = (confMat[1,1]+confMat[2,2]+confMat[3,3]+confMat[4,4])/sum(confMat)
@@ -583,7 +571,7 @@ print(mean(all.acc))
 ```
 Interestingly, adding countries lowers the accuracy.
 
-```{r}
+```{r eval=FALSE}
 rpart.plot::rpart.plot(tree)
 ```
 
