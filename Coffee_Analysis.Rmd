@@ -27,9 +27,14 @@ URL:https://github.com/rfordatascience/tidytuesday/tree/master/data/2020/2020-07
 >Note: within the above link, there was already some pre-processing done to the data with the column and value names.
 
 ```{r include=FALSE}
-coffee_ratings <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-07-07/coffee_ratings.csv')
+#coffee_ratings <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-07-07/coffee_ratings.csv')
 
 ```
+
+```{r, message=FALSE}
+readr::read_csv(here::here("data","coffee.csv"))
+```
+
 
 # Quick Overview 
 
