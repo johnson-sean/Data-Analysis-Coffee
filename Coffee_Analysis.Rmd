@@ -1,6 +1,6 @@
 ---
-title: "Coffee"
-author: "Sean Cerulean Johnson"
+title: "EDA on Coffee"
+author: "Sean Johnson"
 date: "2022-04-03"
 output:
   pdf_document: default
@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Library
 
-```{r}
+```{r,warning=FALSE, message=FALSE}
 library(Thematic)
 library(dplyr)
 library(ggplot2)
@@ -27,21 +27,13 @@ URL:https://github.com/rfordatascience/tidytuesday/tree/master/data/2020/2020-07
 >Note: within the above link, there was already some pre-processing done to the data with the column and value names.
 
 ```{r include=FALSE}
-#coffee_ratings <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-07-07/coffee_ratings.csv')
+coffee_ratings <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-07-07/coffee_ratings.csv')
 
 ```
-
-```{r, message=FALSE}
-readr::read_csv(here::here("data","coffee.csv"))
-```
-
-
 # Quick Overview 
 
 ```{r eval=FALSE}
 summary<-summary(coffee_ratings)
-tibble(summary)%>%
-  tabGT()
 ```
 
 Quite a few NA's.
@@ -193,9 +185,12 @@ c.v2 = c.v1 %>%
 
 ## Re-run plot
 ```{r}
-ggplot(c.v2,aes(x=species,y=Values,color=color))+
-  geom_boxplot()+
-  facet_wrap(~Variables,scales = "free")
+c.v2%>%
+  filter(Variables != "quakers")%>%
+  ggplot(aes(x=species,y=Values))+
+  geom_boxplot(aes(fill=color))+
+  facet_wrap(~Variables,scales = "free")+
+  scale_fill_manual(values=c(Thematic::Vir(n=4)))
 ```
 
 ## Cup points distribution
@@ -203,8 +198,9 @@ ggplot(c.v2,aes(x=species,y=Values,color=color))+
 ```{r}
 c.v2 %>%
   filter(Variables == 'total_cup_points')%>%
-  ggplot(aes(x=species,y=Values,color=color))+
-  geom_boxplot()
+  ggplot(aes(x=species,y=Values))+
+  geom_boxplot(aes(fill=color))+
+  scale_fill_manual(values=c(Thematic::Vir(n=4)))
 ```
 
 ## Cup points distribution: Coffee Color and Processing Method
@@ -435,13 +431,14 @@ for(i in 1:folds){
 print(mean(all.acc))
 table_accuracy[3,1] = mean(all.acc)
 ```
-Not the best not the worst NN that I have seen. If there was more time, I would 
+Not the best but not the worst NN that I have seen. If there was more time, I would 
 have liked to increased the classifiers and used a different library that allowed
 for more hidden layers.
 
 ### Neuarl Network Visual (NeuralNetTools)
 ```{r}
-NeuralNetTools::plotnet(model,circle_cex=5,cex_val=.4,max_sp=TRUE,alpha_val=.25,skip=TRUE)
+NeuralNetTools::plotnet(model,circle_cex=5,cex_val=.4,
+                        max_sp=TRUE,alpha_val=.25,skip=TRUE)
 ```
 
 ## Note
@@ -488,7 +485,7 @@ knn = df[,]
 ```
 
 ## KNN 
-```{r warning=FALSE}
+```{r, warning=FALSE, message=FALSE}
 set.seed(1)
 model <- caret::train(tcp ~ .,
              method     = "knn",
@@ -506,14 +503,18 @@ visual it could possibly run at 9 groups due to the accuracy level.
 
 # View Accuracy Table
 ```{r}
-tab = round(table_accuracy,4)
-tab
+tab <- as_tibble(round(table_accuracy,4))
+tab$`Model Name` <- c('DTree','NB','ANN','KNN')
+tab%>%
+  select(`Model Name`,Accuracy)%>%
+  Thematic::tabGT()
 ```
 
 
 # Preferred Model
 ```{r}
-rpart.plot::rpart.plot(tree)
+rpart.plot::rpart.plot(tree, branch=1, box.palette="RdYlGn",
+                       legend.x = .9,legend.y = 1.05)
 ```
 Top 3 parameters for understanding a coffee's score.
 
